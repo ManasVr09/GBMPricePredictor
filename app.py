@@ -1,4 +1,4 @@
-"""Streamlit interface for the Monte Carlo options pricing engine."""
+"""Quant Society interface for the existing Monte Carlo options engine."""
 
 import numpy as np
 import plotly.graph_objects as go
@@ -7,104 +7,142 @@ import streamlit as st
 from gbm import price_american_option_lsm, price_european_options, simulate_gbm_paths
 
 
-st.set_page_config(page_title="Options Pricer", page_icon="📈", layout="wide")
+st.set_page_config(
+    page_title="Monte Carlo options pricer",
+    page_icon=":material/query_stats:",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
-st.title("Monte Carlo Options Pricer")
-st.caption("Estimate an option's value by simulating 10,000 possible future stock-price paths.")
-
-with st.expander("New to options? Read this first"):
-    st.markdown(
-        """
-        An **option** is a contract tied to a stock. A **call** gives its owner
-        the right to buy the stock at the strike price; it generally becomes
-        more valuable when the stock rises. A **put** gives the right to sell
-        at the strike price; it generally becomes more valuable when the stock falls.
-
-        This tool generates many possible future stock prices, calculates what
-        the option would be worth in each scenario, and averages those results.
-        The price shown is an estimate, not investment advice or a guaranteed value.
-        """
-    )
-
-with st.sidebar:
-    st.header("Model inputs")
-    S0 = st.number_input(
-        "Current stock price (S₀)", min_value=0.01, value=100.0, step=1.0,
-        help="The stock's current market price. For example, enter 100 if one share costs $100 today.",
-    )
-    K = st.number_input(
-        "Strike price (K)", min_value=0.01, value=100.0, step=1.0,
-        help="The fixed price at which the option lets you buy (call) or sell (put) the stock.",
-    )
-    T = st.number_input(
-        "Time to maturity (years)", min_value=0.01, value=1.0, step=0.25,
-        help="How long until the option expires. Enter 1 for one year, 0.5 for six months, or 0.25 for three months.",
-    )
-    sigma = st.number_input(
-        "Volatility (σ)", min_value=0.0, value=0.20, step=0.01, format="%.2f",
-        help="Expected yearly price movement as a decimal. 0.20 means 20% volatility; a larger number means a less predictable stock price.",
-    )
-    r = st.number_input(
-        "Risk-free rate (r)", value=0.05, step=0.01, format="%.2f",
-        help="Annual interest rate used to convert future money into today's value. Enter as a decimal: 0.05 means 5%.",
-    )
-    option_style = st.selectbox(
-        "Exercise style", ("European", "American"),
-        help="European options can be used only at expiry. American options can be used at any point up to expiry.",
-    )
-    option_type = st.selectbox(
-        "Option type", ("Call", "Put"),
-        help="Choose Call if you expect the stock to rise, or Put if you expect it to fall.",
-    )
-    N = st.number_input(
-        "Time steps", min_value=2, value=252, step=1,
-        help="How many points in time the simulation checks. 252 is roughly the number of trading days in a year; higher values are more detailed but slower.",
-    )
-    calculate = st.button("Calculate price", type="primary", use_container_width=True)
+GREEN = "#16836B"
 
 
-def make_path_figure(paths: np.ndarray, maturity: float) -> go.Figure:
-    """Return a Plotly line chart containing 50 simulated paths."""
-    times = np.linspace(maturity / paths.shape[0], maturity, paths.shape[0])
-    figure = go.Figure()
-
-    for path_number in range(min(50, paths.shape[1])):
-        figure.add_trace(
-            go.Scatter(
-                x=times,
-                y=paths[:, path_number],
-                mode="lines",
-                line={"width": 1},
-                opacity=0.45,
-                showlegend=False,
-                hovertemplate="Time: %{x:.2f} years<br>Price: %{y:.2f}<extra></extra>",
-            )
-        )
-
+def chart_layout(figure: go.Figure, *, height: int) -> go.Figure:
+    """Keep both charts consistent with the light research theme."""
     figure.update_layout(
-        title="50 simulated stock-price paths",
-        xaxis_title="Time (years)",
-        yaxis_title="Stock price",
         template="plotly_white",
-        margin={"l": 10, "r": 10, "t": 45, "b": 10},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"family": "Inter, sans-serif", "size": 14, "color": "#454B46"},
+        height=height,
+        margin={"l": 12, "r": 12, "t": 15, "b": 15},
+        showlegend=False,
     )
+    figure.update_xaxes(showgrid=False, zeroline=False)
+    figure.update_yaxes(gridcolor="#ECEEEA", zeroline=False)
     return figure
 
 
-if calculate:
-    with st.spinner("Simulating 10,000 price paths..."):
-        paths = simulate_gbm_paths(S0, r, sigma, T, int(N))
+def path_figure(result: dict) -> go.Figure:
+    """Show 50 sample paths and the median of all 10,000 paths."""
+    times = result["times"]
+    figure = go.Figure()
+    for path in result["sample_paths"].T:
+        figure.add_trace(go.Scatter(
+            x=times, y=path, mode="lines", line={"width": 1, "color": GREEN},
+            opacity=0.18, hoverinfo="skip",
+        ))
+    figure.add_trace(go.Scatter(
+        x=times, y=result["median_path"], mode="lines",
+        line={"width": 2.5, "color": GREEN}, name="Median path",
+        hovertemplate="Year %{x:.2f}<br>Median price $%{y:,.2f}<extra></extra>",
+    ))
+    figure.add_hline(y=result["strike"], line_dash="dash", line_color="#A46E35",
+                     annotation_text="Strike", annotation_position="top left")
+    figure.update_xaxes(title="Time (years)")
+    figure.update_yaxes(title="Stock price ($)")
+    return chart_layout(figure, height=340)
 
-        if option_style == "European":
-            european_call, european_put = price_european_options(paths, K, r, T)
-            option_price = european_call if option_type == "Call" else european_put
-        else:
-            option_price = price_american_option_lsm(
-                paths, K, r, T, option_type=option_type.lower()
-            )
 
-    st.subheader(f"{option_style} {option_type} option price")
-    st.markdown(f"# ${option_price:,.2f}")
-    st.plotly_chart(make_path_figure(paths, T), use_container_width=True)
-else:
-    st.info("Set the inputs in the sidebar, then select **Calculate price**.")
+def expiry_figure(result: dict) -> go.Figure:
+    figure = go.Figure(go.Histogram(
+        x=result["terminal_prices"], nbinsx=55,
+        marker={"color": GREEN, "line": {"color": "#FFFFFF", "width": 0.5}},
+        opacity=0.8,
+        hovertemplate="Stock price $%{x:,.2f}<br>Paths %{y:,}<extra></extra>",
+    ))
+    figure.add_vline(x=result["strike"], line_dash="dash", line_color="#A46E35")
+    figure.update_xaxes(title="Stock price at expiry ($)")
+    figure.update_yaxes(title="Number of paths")
+    return chart_layout(figure, height=270)
+
+
+with st.container(horizontal_alignment="center"):
+    with st.container(width=1200):
+        st.markdown("### Monte Carlo options pricer")
+        st.divider()
+        inputs, output = st.columns([1.4, 4.6], gap="large")
+
+        with inputs:
+            st.markdown("**Model inputs**")
+            with st.form("pricing_inputs", border=False):
+                style = st.segmented_control("Exercise style", ["European", "American"], default="European", required=True)
+                kind = st.segmented_control("Option type", ["Call", "Put"], default="Call", required=True)
+                spot = st.number_input("Stock price ($)", min_value=0.01, value=100.0, step=1.0)
+                strike = st.number_input("Strike price ($)", min_value=0.01, value=100.0, step=1.0)
+                maturity = st.number_input("Maturity (years)", min_value=0.01, value=1.0, step=0.25)
+                volatility = st.number_input("Volatility", min_value=0.0, value=0.20, step=0.01, format="%.2f",
+                                             help="Annual volatility as a decimal: 0.20 means 20%.")
+                rate = st.number_input("Risk-free rate", value=0.05, step=0.01, format="%.2f",
+                                       help="Annual rate as a decimal: 0.05 means 5%.")
+                steps = st.number_input("Time steps", min_value=2, value=252, step=1,
+                                        help="252 approximates the number of trading days in a year.")
+                calculate = st.form_submit_button("Run simulation", type="primary", width="stretch")
+
+        with output:
+            if calculate or "pricing_result" not in st.session_state:
+                with st.spinner("Simulating 10,000 price paths…"):
+                    paths = simulate_gbm_paths(spot, rate, volatility, maturity, int(steps))
+                    if style == "European":
+                        call, put = price_european_options(paths, strike, rate, maturity)
+                        price = call if kind == "Call" else put
+                    else:
+                        price = price_american_option_lsm(paths, strike, rate, maturity, option_type=kind.lower())
+                    st.session_state["pricing_result"] = {
+                        "price": float(price), "style": style, "kind": kind,
+                        "spot": spot, "strike": strike, "maturity": maturity,
+                        "volatility": volatility, "rate": rate, "steps": int(steps),
+                        "times": np.linspace(0, maturity, int(steps) + 1),
+                        "sample_paths": np.vstack([np.full((1, 50), spot), paths[:, :50]]),
+                        "median_path": np.r_[spot, np.median(paths, axis=1)],
+                        "terminal_prices": paths[-1].copy(),
+                    }
+                    del paths
+
+            result = st.session_state["pricing_result"]
+            cards = st.columns(3)
+            cards[0].metric("Estimated option value", f"${result['price']:,.2f}", border=True)
+            cards[1].metric("Exercise style", result["style"], border=True)
+            cards[2].metric("Option type", result["kind"], border=True)
+            with st.container(border=True):
+                st.subheader("Simulated price paths")
+                st.caption("50 sample paths · solid line: median of 10,000 paths · dashed line: strike price")
+                st.plotly_chart(path_figure(result), width="stretch", config={"displayModeBar": False})
+            with st.container(border=True):
+                st.subheader("Where prices finish")
+                st.caption("The distribution of all 10,000 terminal prices under the risk-neutral GBM model.")
+                st.plotly_chart(expiry_figure(result), width="stretch", config={"displayModeBar": False})
+
+            with st.expander("Simulation details"):
+                st.dataframe({
+                    "Input": ["Stock price", "Strike price", "Maturity", "Volatility", "Risk-free rate", "Time steps", "Simulated paths"],
+                    "Value": [f"${result['spot']:,.2f}", f"${result['strike']:,.2f}", f"{result['maturity']:g} years",
+                              f"{result['volatility']:.1%}", f"{result['rate']:.1%}", f"{result['steps']:,}", "10,000"],
+                }, hide_index=True, width="stretch", height="content", row_height=40)
+            with st.expander("How the model works"):
+                st.write(
+                    "Geometric Brownian Motion simulates prices using a constant volatility and risk-free rate. "
+                    "European options use the average discounted payoff at expiry. American options use "
+                    "Longstaff–Schwartz regression to estimate when early exercise is preferable."
+                )
+                st.write(
+                    "A call pays max(stock price − strike, 0); a put pays max(strike − stock price, 0). "
+                    "European options exercise only at expiry; American options may exercise earlier."
+                )
+                st.caption(
+                    "The model assumes no dividends, no transaction costs, and constant parameters. "
+                    "Simulations contain sampling error; the path distribution is risk-neutral, not a forecast "
+                    "of real-world returns. American exercise is evaluated on the simulated time grid."
+                )
+            st.divider()
+            st.caption("QUANT SOCIETY · Monte Carlo options pricer · Educational simulation, not investment advice.")

@@ -31,6 +31,15 @@ python3 -m pip install -r requirements.txt
 python3 -m streamlit run app.py
 ```
 
-The sidebar provides pricing inputs and European/American plus Call/Put
-selections. The main page shows the calculated price and a Plotly chart of 50
-sample simulated paths.
+The Quant Society interface uses a light, centred 1200 px workspace with compact
+left-hand inputs and a restrained green palette. The default European call runs
+once when the app opens. Submit **Run simulation** to apply inputs and generate a
+new estimate; results remain stable across unrelated reruns.
+
+Result cards show the option value, exercise style, and option type. The charts
+show 50 sample paths, the median across all 10,000 paths, the strike price, and
+the terminal-price distribution. Methodology and the inputs used for the current
+result are available in expanders. The Python pricing engine in `gbm.py` is unchanged.
+
+Use Streamlit 1.60 or later. Community Cloud should deploy `app.py` from the root
+of this repository; `.streamlit/config.toml` provides the shared light theme.
