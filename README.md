@@ -31,8 +31,10 @@ python3 -m pip install -r requirements.txt
 python3 -m streamlit run app.py
 ```
 
-The Quant Society interface uses a light, centred 1200 px workspace with compact
-left-hand inputs and a restrained green palette. The default European call runs
+The dashboard uses the classic wide Streamlit layout with inputs in the native
+left sidebar. Light mode matches Quant Society’s off-white (#F8F6F2), and dark mode
+uses classic grey. Switch with **⋮ → Light / Dark**. Website links start in off-white
+using `embed_options=light_theme`; direct visits respect system/saved preferences. The default European call runs
 once when the app opens. Submit **Run simulation** to apply inputs and generate a
 new estimate; results remain stable across unrelated reruns.
 
@@ -42,7 +44,7 @@ the terminal-price distribution. Methodology and the inputs used for the current
 result are available in expanders. The Python pricing engine in `gbm.py` is unchanged.
 
 Use Streamlit 1.60 or later. Community Cloud should deploy `app.py` from the root
-of this repository; `.streamlit/config.toml` provides the shared light theme.
+of this repository; `.streamlit/config.toml` provides both shared themes. Chart text follows the active foreground color immediately.
 
 ## Performance
 

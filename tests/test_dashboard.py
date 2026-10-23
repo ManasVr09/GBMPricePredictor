@@ -36,8 +36,8 @@ def test_default_result_survives_reruns_and_submitted_inputs_are_used(monkeypatc
 def test_american_put_uses_the_selected_exercise_style(monkeypatch):
     monkeypatch.syspath_prepend(str(APP.parent))
     app = AppTest.from_file(str(APP), default_timeout=30).run()
-    app.get("button_group")[0].set_value("American")
-    app.get("button_group")[1].set_value("Put")
+    app.selectbox[0].set_value("American")
+    app.selectbox[1].set_value("Put")
     for widget in app.number_input:
         if widget.label == "Time steps":
             widget.set_value(12)
