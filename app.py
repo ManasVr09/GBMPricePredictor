@@ -20,6 +20,16 @@ st.set_page_config(
 GREEN = "#16836B"
 
 
+def result_card(label, value, *, text=False, help=None, width=250):
+    """Wrap full labels and text outcomes; reserve large metric type for short numbers."""
+    with st.container(border=True, width=width):
+        st.markdown(label, help=help)
+        if text or len(str(value)) > 8:
+            st.subheader(str(value), anchor=False)
+        else:
+            st.metric(label, value, label_visibility="collapsed")
+
+
 def chart_layout(figure: go.Figure, *, height: int) -> go.Figure:
     """Keep both charts consistent with the light research theme."""
     figure.update_layout(
@@ -128,10 +138,10 @@ with st.container(horizontal_alignment="center"):
             if "pricing_draw_id" not in st.session_state:
                 st.session_state["pricing_draw_id"] = uuid4().hex
             draw_key = (st.session_state["pricing_draw_id"], Path(__file__).stat().st_mtime_ns)
-            cards = st.columns(3)
-            cards[0].metric("Estimated option value", f"${result['price']:,.2f}", border=True)
-            cards[1].metric("Exercise style", result["style"], border=True)
-            cards[2].metric("Option type", result["kind"], border=True)
+            with st.container(horizontal=True):
+                result_card("Estimated option value", f"${result['price']:,.2f}")
+                result_card("Exercise style", result["style"], text=True)
+                result_card("Option type", result["kind"], text=True)
             with st.container(border=True):
                 st.subheader("Simulated price paths")
                 st.caption("50 sample paths · solid line: median of 10,000 paths · dashed line: strike price")

@@ -56,3 +56,17 @@ def test_separate_visitors_do_not_share_a_random_draw(monkeypatch):
     assert first.session_state["pricing_draw_id"] != second.session_state["pricing_draw_id"]
     assert not np.array_equal(first.session_state["pricing_result"]["terminal_prices"],
                               second.session_state["pricing_result"]["terminal_prices"])
+
+
+def test_text_and_large_currency_values_are_not_oversized_metrics(monkeypatch):
+    monkeypatch.syspath_prepend(str(APP.parent))
+    app = AppTest.from_file(str(APP), default_timeout=30).run()
+    assert any(heading.value == "European" for heading in app.subheader)
+    for widget in app.number_input:
+        if widget.label == "Stock price ($)": widget.set_value(1_000_000.0)
+        elif widget.label == "Strike price ($)": widget.set_value(0.01)
+        elif widget.label in ("Volatility", "Risk-free rate"): widget.set_value(0.0)
+        elif widget.label == "Time steps": widget.set_value(2)
+    app.button[0].click().run()
+    assert not app.exception
+    assert any(heading.value == "$999,999.99" for heading in app.subheader)
