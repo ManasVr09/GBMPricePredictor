@@ -43,3 +43,7 @@ result are available in expanders. The Python pricing engine in `gbm.py` is unch
 
 Use Streamlit 1.60 or later. Community Cloud should deploy `app.py` from the root
 of this repository; `.streamlit/config.toml` provides the shared light theme.
+
+## Performance
+
+See the [performance notes](PERFORMANCE.md) for caching, lazy loading, and preservation guarantees.

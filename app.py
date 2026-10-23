@@ -1,5 +1,8 @@
 """Quant Society interface for the existing Monte Carlo options engine."""
 
+from pathlib import Path
+from uuid import uuid4
+
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
@@ -67,6 +70,17 @@ def expiry_figure(result: dict) -> go.Figure:
     return chart_layout(figure, height=270)
 
 
+@st.cache_data(max_entries=4, show_spinner=False)
+def render_paths(draw_key: tuple[str, int], _result: dict) -> None:
+    # The unique per-draw key prevents different viewers/runs from sharing random results.
+    st.plotly_chart(path_figure(_result), width="stretch", config={"displayModeBar": False})
+
+
+@st.cache_data(max_entries=4, show_spinner=False)
+def render_expiry(draw_key: tuple[str, int], _result: dict) -> None:
+    st.plotly_chart(expiry_figure(_result), width="stretch", config={"displayModeBar": False})
+
+
 with st.container(horizontal_alignment="center"):
     with st.container(width=1200):
         st.markdown("### Monte Carlo options pricer")
@@ -107,9 +121,13 @@ with st.container(horizontal_alignment="center"):
                         "median_path": np.r_[spot, np.median(paths, axis=1)],
                         "terminal_prices": paths[-1].copy(),
                     }
+                    st.session_state["pricing_draw_id"] = uuid4().hex
                     del paths
 
             result = st.session_state["pricing_result"]
+            if "pricing_draw_id" not in st.session_state:
+                st.session_state["pricing_draw_id"] = uuid4().hex
+            draw_key = (st.session_state["pricing_draw_id"], Path(__file__).stat().st_mtime_ns)
             cards = st.columns(3)
             cards[0].metric("Estimated option value", f"${result['price']:,.2f}", border=True)
             cards[1].metric("Exercise style", result["style"], border=True)
@@ -117,32 +135,36 @@ with st.container(horizontal_alignment="center"):
             with st.container(border=True):
                 st.subheader("Simulated price paths")
                 st.caption("50 sample paths · solid line: median of 10,000 paths · dashed line: strike price")
-                st.plotly_chart(path_figure(result), width="stretch", config={"displayModeBar": False})
+                render_paths(draw_key, result)
             with st.container(border=True):
                 st.subheader("Where prices finish")
                 st.caption("The distribution of all 10,000 terminal prices under the risk-neutral GBM model.")
-                st.plotly_chart(expiry_figure(result), width="stretch", config={"displayModeBar": False})
+                render_expiry(draw_key, result)
 
-            with st.expander("Simulation details"):
-                st.dataframe({
-                    "Input": ["Stock price", "Strike price", "Maturity", "Volatility", "Risk-free rate", "Time steps", "Simulated paths"],
-                    "Value": [f"${result['spot']:,.2f}", f"${result['strike']:,.2f}", f"{result['maturity']:g} years",
-                              f"{result['volatility']:.1%}", f"{result['rate']:.1%}", f"{result['steps']:,}", "10,000"],
-                }, hide_index=True, width="stretch", height="content", row_height=40)
-            with st.expander("How the model works"):
-                st.write(
-                    "Geometric Brownian Motion simulates prices using a constant volatility and risk-free rate. "
-                    "European options use the average discounted payoff at expiry. American options use "
-                    "Longstaff–Schwartz regression to estimate when early exercise is preferable."
-                )
-                st.write(
-                    "A call pays max(stock price − strike, 0); a put pays max(strike − stock price, 0). "
-                    "European options exercise only at expiry; American options may exercise earlier."
-                )
-                st.caption(
-                    "The model assumes no dividends, no transaction costs, and constant parameters. "
-                    "Simulations contain sampling error; the path distribution is risk-neutral, not a forecast "
-                    "of real-world returns. American exercise is evaluated on the simulated time grid."
-                )
+            details = st.expander('Simulation details', on_change="rerun", key="simulation_details")
+            if details.open:
+                with details:
+                    st.dataframe({
+                        "Input": ["Stock price", "Strike price", "Maturity", "Volatility", "Risk-free rate", "Time steps", "Simulated paths"],
+                        "Value": [f"${result['spot']:,.2f}", f"${result['strike']:,.2f}", f"{result['maturity']:g} years",
+                                  f"{result['volatility']:.1%}", f"{result['rate']:.1%}", f"{result['steps']:,}", "10,000"],
+                    }, hide_index=True, width="stretch", height="content", row_height=40)
+            details = st.expander('How the model works', on_change="rerun", key="model_methodology")
+            if details.open:
+                with details:
+                    st.write(
+                        "Geometric Brownian Motion simulates prices using a constant volatility and risk-free rate. "
+                        "European options use the average discounted payoff at expiry. American options use "
+                        "Longstaff–Schwartz regression to estimate when early exercise is preferable."
+                    )
+                    st.write(
+                        "A call pays max(stock price − strike, 0); a put pays max(strike − stock price, 0). "
+                        "European options exercise only at expiry; American options may exercise earlier."
+                    )
+                    st.caption(
+                        "The model assumes no dividends, no transaction costs, and constant parameters. "
+                        "Simulations contain sampling error; the path distribution is risk-neutral, not a forecast "
+                        "of real-world returns. American exercise is evaluated on the simulated time grid."
+                    )
             st.divider()
             st.caption("QUANT SOCIETY · Monte Carlo options pricer · Educational simulation, not investment advice.")
